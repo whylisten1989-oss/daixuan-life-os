@@ -1,0 +1,483 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum SpaceKind {
+  PERSONAL
+  FAMILY
+}
+
+enum SpaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum TaskStatus {
+  INBOX
+  TODO
+  IN_PROGRESS
+  WAITING
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum AccountType {
+  CASH
+  CHECKING
+  SAVINGS
+  CREDIT_CARD
+  LOAN
+  INVESTMENT
+  OTHER
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum HealthGoalType {
+  SLEEP
+  WATER
+  WORKOUT
+  ENERGY
+  MOOD
+  STRESS
+  CUSTOM
+}
+
+enum AiDraftStatus {
+  DRAFT
+  CONFIRMED
+  REJECTED
+  EXECUTED
+  FAILED
+}
+
+model Profile {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  timezone    String   @default("Asia/Shanghai")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("profiles")
+}
+
+model Space {
+  id          String      @id @default(uuid()) @db.Uuid
+  name        String
+  kind        SpaceKind   @default(PERSONAL)
+  createdBy   String      @map("created_by") @db.Uuid
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  members     SpaceMember[]
+  projects    Project[]
+  tasks       Task[]
+  accounts    Account[]
+  categories  FinanceCategory[]
+  transactions Transaction[]
+  budgets     Budget[]
+  recurringExpenses RecurringExpense[]
+  subscriptions Subscription[]
+  creditCards CreditCard[]
+  loans       Loan[]
+  savingsGoals SavingsGoal[]
+  purchasePlans PurchasePlan[]
+  sleepLogs   SleepLog[]
+  waterLogs   WaterLog[]
+  workoutLogs WorkoutLog[]
+  dailyCheckins DailyCheckin[]
+  healthGoals HealthGoal[]
+  notes       KnowledgeNote[]
+  tags        KnowledgeTag[]
+  noteTags    NoteTag[]
+  aiDrafts    AiActionDraft[]
+
+  @@map("spaces")
+}
+
+model SpaceMember {
+  id        String    @id @default(uuid()) @db.Uuid
+  spaceId   String    @map("space_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  role      SpaceRole @default(MEMBER)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  space     Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, userId])
+  @@index([userId])
+  @@map("space_members")
+}
+
+model Project {
+  id          String   @id @default(uuid()) @db.Uuid
+  spaceId     String   @map("space_id") @db.Uuid
+  name        String
+  description String?
+  color       String   @default("jade")
+  status      String   @default("ACTIVE")
+  targetDate  DateTime? @map("target_date") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@index([spaceId, status])
+  @@map("projects")
+}
+
+model Task {
+  id               String       @id @default(uuid()) @db.Uuid
+  spaceId          String       @map("space_id") @db.Uuid
+  projectId        String?      @map("project_id") @db.Uuid
+  parentId         String?      @map("parent_id") @db.Uuid
+  title            String
+  description      String?
+  status           TaskStatus   @default(INBOX)
+  priority         TaskPriority @default(NONE)
+  dueAt            DateTime?    @map("due_at") @db.Timestamptz(6)
+  scheduledAt      DateTime?    @map("scheduled_at") @db.Timestamptz(6)
+  estimateMinutes  Int?         @map("estimate_minutes")
+  actualMinutes    Int?         @map("actual_minutes")
+  recurrenceRule   Json?        @map("recurrence_rule")
+  waitingFor       String?      @map("waiting_for")
+  completedAt      DateTime?    @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space            Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  project          Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent           Task?        @relation("TaskChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks         Task[]       @relation("TaskChildren")
+
+  @@index([spaceId, status, dueAt])
+  @@index([spaceId, projectId])
+  @@index([parentId])
+  @@map("tasks")
+}
+
+model Account {
+  id              String      @id @default(uuid()) @db.Uuid
+  spaceId         String      @map("space_id") @db.Uuid
+  name            String
+  type            AccountType
+  currency        String      @default("CNY")
+  openingBalance  Decimal     @default(0) @map("opening_balance") @db.Decimal(14, 2)
+  isArchived      Boolean     @default(false) @map("is_archived")
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space           Space       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  creditCard      CreditCard?
+  loan            Loan?
+
+  @@index([spaceId, type])
+  @@map("accounts")
+}
+
+model FinanceCategory {
+  id           String          @id @default(uuid()) @db.Uuid
+  spaceId      String          @map("space_id") @db.Uuid
+  name         String
+  kind         TransactionType
+  color        String          @default("stone")
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  space        Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@unique([spaceId, name, kind])
+  @@map("finance_categories")
+}
+
+model Transaction {
+  id          String          @id @default(uuid()) @db.Uuid
+  spaceId     String          @map("space_id") @db.Uuid
+  accountId   String          @map("account_id") @db.Uuid
+  categoryId  String?         @map("category_id") @db.Uuid
+  type        TransactionType
+  amount      Decimal         @db.Decimal(14, 2)
+  occurredAt  DateTime        @map("occurred_at") @db.Timestamptz(6)
+  merchant    String?
+  note        String?
+  transferRef String?         @map("transfer_ref") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  account     Account         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category    FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([spaceId, occurredAt])
+  @@index([accountId, occurredAt])
+  @@map("transactions")
+}
+
+model Budget {
+  id          String          @id @default(uuid()) @db.Uuid
+  spaceId     String          @map("space_id") @db.Uuid
+  categoryId  String          @map("category_id") @db.Uuid
+  month       DateTime        @db.Date
+  amount      Decimal         @db.Decimal(14, 2)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  category    FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, categoryId, month])
+  @@map("budgets")
+}
+
+model RecurringExpense {
+  id          String   @id @default(uuid()) @db.Uuid
+  spaceId     String   @map("space_id") @db.Uuid
+  name        String
+  amount      Decimal  @db.Decimal(14, 2)
+  cadence     String
+  nextDueAt   DateTime @map("next_due_at") @db.Date
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, nextDueAt])
+  @@map("recurring_expenses")
+}
+
+model Subscription {
+  id          String   @id @default(uuid()) @db.Uuid
+  spaceId     String   @map("space_id") @db.Uuid
+  name        String
+  amount      Decimal  @db.Decimal(14, 2)
+  cadence     String
+  nextDueAt   DateTime @map("next_due_at") @db.Date
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, status])
+  @@map("subscriptions")
+}
+
+model CreditCard {
+  id             String   @id @default(uuid()) @db.Uuid
+  spaceId        String   @map("space_id") @db.Uuid
+  accountId      String   @unique @map("account_id") @db.Uuid
+  creditLimit    Decimal  @map("credit_limit") @db.Decimal(14, 2)
+  statementDay   Int      @map("statement_day")
+  repaymentDay   Int      @map("repayment_day")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@map("credit_cards")
+}
+
+model Loan {
+  id               String   @id @default(uuid()) @db.Uuid
+  spaceId          String   @map("space_id") @db.Uuid
+  accountId        String   @unique @map("account_id") @db.Uuid
+  principal        Decimal  @db.Decimal(14, 2)
+  outstanding      Decimal  @db.Decimal(14, 2)
+  annualRate       Decimal  @map("annual_rate") @db.Decimal(7, 4)
+  monthlyPayment   Decimal  @map("monthly_payment") @db.Decimal(14, 2)
+  nextPaymentAt    DateTime @map("next_payment_at") @db.Date
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space            Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  account          Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@map("loans")
+}
+
+model SavingsGoal {
+  id           String   @id @default(uuid()) @db.Uuid
+  spaceId      String   @map("space_id") @db.Uuid
+  name         String
+  targetAmount Decimal  @map("target_amount") @db.Decimal(14, 2)
+  savedAmount  Decimal  @default(0) @map("saved_amount") @db.Decimal(14, 2)
+  targetDate   DateTime? @map("target_date") @db.Date
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@map("savings_goals")
+}
+
+model PurchasePlan {
+  id           String   @id @default(uuid()) @db.Uuid
+  spaceId      String   @map("space_id") @db.Uuid
+  name         String
+  targetAmount Decimal  @map("target_amount") @db.Decimal(14, 2)
+  plannedAt    DateTime? @map("planned_at") @db.Date
+  priority     Int      @default(0)
+  status       String   @default("PLANNING")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, status])
+  @@map("purchase_plans")
+}
+
+model SleepLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  spaceId      String   @map("space_id") @db.Uuid
+  sleepAt      DateTime @map("sleep_at") @db.Timestamptz(6)
+  wakeAt       DateTime @map("wake_at") @db.Timestamptz(6)
+  quality      Int?
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, sleepAt])
+  @@map("sleep_logs")
+}
+
+model WaterLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  spaceId     String   @map("space_id") @db.Uuid
+  amountMl    Int      @map("amount_ml")
+  recordedAt  DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, recordedAt])
+  @@map("water_logs")
+}
+
+model WorkoutLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  spaceId         String   @map("space_id") @db.Uuid
+  activity        String
+  durationMinutes Int      @map("duration_minutes")
+  intensity       Int?
+  calories        Int?
+  startedAt       DateTime @map("started_at") @db.Timestamptz(6)
+  note            String?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  space           Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, startedAt])
+  @@map("workout_logs")
+}
+
+model DailyCheckin {
+  id          String   @id @default(uuid()) @db.Uuid
+  spaceId     String   @map("space_id") @db.Uuid
+  date        DateTime @db.Date
+  energy      Int
+  mood        Int
+  stress      Int
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, date])
+  @@map("daily_checkins")
+}
+
+model HealthGoal {
+  id          String         @id @default(uuid()) @db.Uuid
+  spaceId     String         @map("space_id") @db.Uuid
+  type        HealthGoalType
+  name        String
+  targetValue Decimal        @map("target_value") @db.Decimal(12, 2)
+  unit        String
+  cadence     String
+  isActive    Boolean        @default(true) @map("is_active")
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, type])
+  @@map("health_goals")
+}
+
+model KnowledgeNote {
+  id          String   @id @default(uuid()) @db.Uuid
+  spaceId     String   @map("space_id") @db.Uuid
+  title       String
+  content     String?
+  isFavorite  Boolean  @default(false) @map("is_favorite")
+  source      String   @default("NATIVE")
+  externalRef String?  @map("external_ref")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  tags        NoteTag[]
+
+  @@index([spaceId, updatedAt])
+  @@unique([spaceId, id])
+  @@map("knowledge_notes")
+}
+
+model KnowledgeTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  spaceId   String   @map("space_id") @db.Uuid
+  name      String
+  color     String   @default("stone")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  notes     NoteTag[]
+
+  @@unique([spaceId, name])
+  @@unique([spaceId, id])
+  @@map("knowledge_tags")
+}
+
+model NoteTag {
+  spaceId String        @map("space_id") @db.Uuid
+  noteId  String        @map("note_id") @db.Uuid
+  tagId   String        @map("tag_id") @db.Uuid
+  space   Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  note    KnowledgeNote @relation(fields: [spaceId, noteId], references: [spaceId, id], onDelete: Cascade)
+  tag     KnowledgeTag  @relation(fields: [spaceId, tagId], references: [spaceId, id], onDelete: Cascade)
+
+  @@id([spaceId, noteId, tagId])
+  @@index([noteId])
+  @@index([tagId])
+  @@map("note_tags")
+}
+
+model AiActionDraft {
+  id             String        @id @default(uuid()) @db.Uuid
+  spaceId        String        @map("space_id") @db.Uuid
+  createdBy      String        @map("created_by") @db.Uuid
+  input          String
+  actionType     String        @map("action_type")
+  payload        Json
+  status         AiDraftStatus @default(DRAFT)
+  confirmedAt    DateTime?     @map("confirmed_at") @db.Timestamptz(6)
+  executedAt     DateTime?     @map("executed_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space          Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, status])
+  @@map("ai_action_drafts")
+}
