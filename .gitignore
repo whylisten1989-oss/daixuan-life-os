@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+
+# local environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# generated
+*.tsbuildinfo
+src/generated/prisma/
+
+# Vercel
+.vercel/
+
+# editor / OS
+.DS_Store
+Thumbs.db
+*.log
