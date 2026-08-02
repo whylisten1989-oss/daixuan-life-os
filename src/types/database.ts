@@ -210,8 +210,10 @@ export type Database = {
           mood: number
           note: string | null
           space_id: string
+          steps: number | null
           stress: number
           updated_at: string
+          weight_kg: number | null
         }
         Insert: {
           created_at?: string
@@ -221,8 +223,10 @@ export type Database = {
           mood: number
           note?: string | null
           space_id: string
+          steps?: number | null
           stress: number
           updated_at?: string
+          weight_kg?: number | null
         }
         Update: {
           created_at?: string
@@ -232,12 +236,72 @@ export type Database = {
           mood?: number
           note?: string | null
           space_id?: string
+          steps?: number | null
           stress?: number
           updated_at?: string
+          weight_kg?: number | null
         }
         Relationships: [
           {
             foreignKeyName: "daily_checkins_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      debt_payments: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          from_account_id: string
+          id: string
+          kind: Database["public"]["Enums"]["DebtPaymentKind"]
+          note: string | null
+          paid_at: string
+          space_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          from_account_id: string
+          id?: string
+          kind: Database["public"]["Enums"]["DebtPaymentKind"]
+          note?: string | null
+          paid_at?: string
+          space_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          from_account_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["DebtPaymentKind"]
+          note?: string | null
+          paid_at?: string
+          space_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_payments_from_account_id_fkey"
+            columns: ["from_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_payments_space_id_fkey"
             columns: ["space_id"]
             isOneToOne: false
             referencedRelation: "spaces"
@@ -659,6 +723,60 @@ export type Database = {
           },
         ]
       }
+      salary_settings: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          id: string
+          is_active: boolean
+          last_received_at: string | null
+          last_received_month: string | null
+          pay_day: number
+          space_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_received_at?: string | null
+          last_received_month?: string | null
+          pay_day: number
+          space_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_received_at?: string | null
+          last_received_month?: string | null
+          pay_day?: number
+          space_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "salary_settings_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: true
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       savings_goals: {
         Row: {
           created_at: string
@@ -844,57 +962,72 @@ export type Database = {
       tasks: {
         Row: {
           actual_minutes: number | null
+          area: Database["public"]["Enums"]["TaskArea"]
           completed_at: string | null
           created_at: string
           description: string | null
           due_at: string | null
+          ended_at: string | null
           estimate_minutes: number | null
           id: string
+          next_follow_up_at: string | null
           parent_id: string | null
           priority: Database["public"]["Enums"]["TaskPriority"]
           project_id: string | null
           recurrence_rule: Json | null
           scheduled_at: string | null
           space_id: string
+          started_at: string | null
           status: Database["public"]["Enums"]["TaskStatus"]
+          tags: string[]
           title: string
           updated_at: string
           waiting_for: string | null
         }
         Insert: {
           actual_minutes?: number | null
+          area?: Database["public"]["Enums"]["TaskArea"]
           completed_at?: string | null
           created_at?: string
           description?: string | null
           due_at?: string | null
+          ended_at?: string | null
           estimate_minutes?: number | null
           id?: string
+          next_follow_up_at?: string | null
           parent_id?: string | null
           priority?: Database["public"]["Enums"]["TaskPriority"]
           project_id?: string | null
           recurrence_rule?: Json | null
           scheduled_at?: string | null
           space_id: string
+          started_at?: string | null
           status?: Database["public"]["Enums"]["TaskStatus"]
+          tags?: string[]
           title: string
           updated_at?: string
           waiting_for?: string | null
         }
         Update: {
           actual_minutes?: number | null
+          area?: Database["public"]["Enums"]["TaskArea"]
           completed_at?: string | null
           created_at?: string
           description?: string | null
           due_at?: string | null
+          ended_at?: string | null
           estimate_minutes?: number | null
           id?: string
+          next_follow_up_at?: string | null
           parent_id?: string | null
           priority?: Database["public"]["Enums"]["TaskPriority"]
           project_id?: string | null
           recurrence_rule?: Json | null
           scheduled_at?: string | null
           space_id?: string
+          started_at?: string | null
           status?: Database["public"]["Enums"]["TaskStatus"]
+          tags?: string[]
           title?: string
           updated_at?: string
           waiting_for?: string | null
@@ -1028,33 +1161,39 @@ export type Database = {
           calories: number | null
           created_at: string
           duration_minutes: number
+          feeling: number | null
           id: string
           intensity: number | null
           note: string | null
           space_id: string
           started_at: string
+          steps: number | null
         }
         Insert: {
           activity: string
           calories?: number | null
           created_at?: string
           duration_minutes: number
+          feeling?: number | null
           id?: string
           intensity?: number | null
           note?: string | null
           space_id: string
           started_at: string
+          steps?: number | null
         }
         Update: {
           activity?: string
           calories?: number | null
           created_at?: string
           duration_minutes?: number
+          feeling?: number | null
           id?: string
           intensity?: number | null
           note?: string | null
           space_id?: string
           started_at?: string
+          steps?: number | null
         }
         Relationships: [
           {
@@ -1078,11 +1217,15 @@ export type Database = {
         | "CASH"
         | "CHECKING"
         | "SAVINGS"
+        | "WECHAT"
+        | "ALIPAY"
         | "CREDIT_CARD"
         | "LOAN"
         | "INVESTMENT"
+        | "CUSTOM"
         | "OTHER"
       AiDraftStatus: "DRAFT" | "CONFIRMED" | "REJECTED" | "EXECUTED" | "FAILED"
+      DebtPaymentKind: "CREDIT_CARD" | "LOAN"
       HealthGoalType:
         | "SLEEP"
         | "WATER"
@@ -1093,9 +1236,11 @@ export type Database = {
         | "CUSTOM"
       SpaceKind: "PERSONAL" | "FAMILY"
       SpaceRole: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER"
+      TaskArea: "WORK" | "LIFE"
       TaskPriority: "NONE" | "LOW" | "MEDIUM" | "HIGH" | "URGENT"
       TaskStatus:
         | "INBOX"
+        | "PLANNED"
         | "TODO"
         | "IN_PROGRESS"
         | "WAITING"
@@ -1233,12 +1378,16 @@ export const Constants = {
         "CASH",
         "CHECKING",
         "SAVINGS",
+        "WECHAT",
+        "ALIPAY",
         "CREDIT_CARD",
         "LOAN",
         "INVESTMENT",
+        "CUSTOM",
         "OTHER",
       ],
       AiDraftStatus: ["DRAFT", "CONFIRMED", "REJECTED", "EXECUTED", "FAILED"],
+      DebtPaymentKind: ["CREDIT_CARD", "LOAN"],
       HealthGoalType: [
         "SLEEP",
         "WATER",
@@ -1250,9 +1399,11 @@ export const Constants = {
       ],
       SpaceKind: ["PERSONAL", "FAMILY"],
       SpaceRole: ["OWNER", "ADMIN", "MEMBER", "VIEWER"],
+      TaskArea: ["WORK", "LIFE"],
       TaskPriority: ["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"],
       TaskStatus: [
         "INBOX",
+        "PLANNED",
         "TODO",
         "IN_PROGRESS",
         "WAITING",

@@ -7,16 +7,16 @@ import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
 import { navItems } from "./nav-items";
 
-export function MobileNav({ demo = false }: { demo?: boolean }) {
+export function MobileNav() {
   const pathname = usePathname();
   const setQuickCreateOpen = useUiStore((state) => state.setQuickCreateOpen);
   const primaryItems = navItems.slice(0, 4);
-  const moreHref = demo ? "/demo/knowledge" : "/knowledge";
+  const moreHref = "/knowledge";
 
   return (
     <nav aria-label="手机主导航" className="fixed inset-x-0 bottom-0 z-30 grid h-[78px] grid-cols-6 border-t border-border bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
       {primaryItems.slice(0, 2).map((item) => {
-        const href = demo ? item.demoHref : item.href;
+        const href = item.href;
         const Icon = item.icon;
         const selected = pathname === href;
         return (
@@ -30,7 +30,7 @@ export function MobileNav({ demo = false }: { demo?: boolean }) {
         <Plus aria-hidden="true" className="size-6" />
       </button>
       {primaryItems.slice(2).map((item) => {
-        const href = demo ? item.demoHref : item.href;
+        const href = item.href;
         const Icon = item.icon;
         const selected = pathname === href;
         return (

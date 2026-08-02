@@ -1,5 +1,16 @@
 # 数据模型
 
+## Web V1 增量（2026-08）
+
+- `tasks` 新增工作/生活领域、标签、下次跟进、实际开始与结束时间；状态加入 `PLANNED`。
+- `AccountType` 新增微信、支付宝与自定义账户类型。
+- `salary_settings` 保存每月工资、发薪日、到账账户与本月到账状态。
+- `debt_payments` 统一记录信用卡和贷款还款，保留还款来源账户。
+- `workout_logs` 新增步数与运动后感受；`daily_checkins` 新增步数与可选体重。
+- 所有新增业务记录继续以 `space_id` 隔离；新表均启用 RLS，只有 `authenticated` 获得 CRUD，`anon` 无表权限。
+
+对应迁移：`supabase/migrations/20260802162108_web_v1_core.sql`。
+
 `Space` 是数据隔离根节点，`SpaceMember` 记录用户角色。除用户档案外，所有业务记录均显式携带 `spaceId`，为个人空间和未来家庭空间使用同一套隔离机制。
 
 ## 身份与空间

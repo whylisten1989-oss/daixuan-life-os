@@ -1,101 +1,45 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, Check, CircleDollarSign, Droplets, ListChecks, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
-import { z } from "zod";
+import { BookOpen, Check, CircleDollarSign, Droplets, ListChecks } from "lucide-react";
+import { useState } from "react";
+import { FormField, FormStatus, Select, Textarea } from "@/components/forms/form-controls";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useUiStore } from "@/store/ui-store";
+import { Input } from "@/components/ui/input";
+import { useFinance, useFinanceActions } from "@/hooks/use-finance";
+import { useHealthActions } from "@/hooks/use-health";
+import { useTaskActions } from "@/hooks/use-tasks";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/store/ui-store";
 
-const commandSchema = z.string().trim().min(2, "请至少输入两个字").max(240, "内容过长");
-const types = [
-  { id: "task", label: "任务", icon: ListChecks },
-  { id: "expense", label: "收支", icon: CircleDollarSign },
-  { id: "water", label: "饮水", icon: Droplets },
-  { id: "note", label: "笔记", icon: BookOpen },
-] as const;
+const types = [{ id: "task", label: "任务", icon: ListChecks }, { id: "expense", label: "支出", icon: CircleDollarSign }, { id: "income", label: "收入", icon: CircleDollarSign }, { id: "water", label: "饮水", icon: Droplets }, { id: "note", label: "笔记", icon: BookOpen }] as const;
+type QuickType = (typeof types)[number]["id"];
 
-function inferPreview(input: string, selected: (typeof types)[number]["id"]) {
-  if (selected === "water") return { type: "健康记录 · 饮水", content: input, pending: "记录时间" };
-  if (selected === "expense") return { type: "财务记录 · 待分类", content: input, pending: "账户、分类" };
-  if (selected === "note") return { type: "知识记录 · 快速笔记", content: input, pending: "标签" };
-  return { type: "任务 · Inbox", content: input, pending: "截止日期、优先级" };
+export function QuickCreateDialog() {
+  const open = useUiStore((state) => state.quickCreateOpen); const setOpen = useUiStore((state) => state.setQuickCreateOpen);
+  const workspace = useWorkspace(); const finance = useFinance(workspace.data?.spaceId); const taskActions = useTaskActions(workspace.data?.spaceId); const financeActions = useFinanceActions(workspace.data?.spaceId); const healthActions = useHealthActions(workspace.data?.spaceId);
+  const [selected, setSelected] = useState<QuickType>("task"); const [status, setStatus] = useState(""); const [error, setError] = useState("");
+  const close = () => { setOpen(false); setStatus(""); setError(""); setSelected("task"); };
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); const form = new FormData(event.currentTarget); const title = String(form.get("title") ?? "").trim(); setError(""); setStatus("");
+    try {
+      if (!workspace.data) throw new Error("个人空间仍在加载");
+      if (selected === "task") await taskActions.save.mutateAsync({ values: { title, status: "INBOX", area: String(form.get("area")) as "WORK" | "LIFE" } });
+      if (selected === "expense" || selected === "income") await financeActions.insert.mutateAsync({ table: "transactions", values: { account_id: String(form.get("accountId")), type: selected === "expense" ? "EXPENSE" : "INCOME", amount: Number(form.get("amount")), occurred_at: new Date().toISOString(), merchant: title || null } });
+      if (selected === "water") await healthActions.save.mutateAsync({ table: "water_logs", values: { amount_ml: Number(form.get("amount")), recorded_at: new Date().toISOString() } });
+      if (selected === "note") { const { error: noteError } = await createClient().from("knowledge_notes").insert({ space_id: workspace.data.spaceId, title, content: String(form.get("content") ?? "") || null }); if (noteError) throw noteError; }
+      event.currentTarget.reset(); setStatus("已保存到当前个人空间"); setTimeout(close, 700);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "保存失败"); }
+  };
+  const busy = taskActions.save.isPending || financeActions.insert.isPending || healthActions.save.isPending;
+  return <Dialog open={open} onOpenChange={(next) => next ? setOpen(true) : close()}><DialogContent><DialogHeader><DialogTitle>快速创建</DialogTitle><DialogDescription>选择记录类型后直接写入对应模块，不调用 AI。</DialogDescription></DialogHeader><form onSubmit={submit}><div className="space-y-5 px-5 py-5 sm:px-6"><div className="flex gap-2 overflow-x-auto scrollbar-none">{types.map((item) => { const Icon = item.icon; return <button key={item.id} type="button" onClick={() => { setSelected(item.id); setError(""); }} className={cn("flex min-h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-sm text-muted", selected === item.id && "border-primary bg-surface-raised text-foreground")}><Icon className="size-4" />{item.label}</button>; })}</div><QuickFields selected={selected} accounts={finance.data?.accounts ?? []} /><FormStatus>{status ? <span className="flex items-center gap-2"><Check className="size-4" />{status}</span> : null}</FormStatus><FormStatus danger>{error}</FormStatus></div><DialogFooter><Button type="button" variant="outline" onClick={close}>取消</Button><Button type="submit" disabled={busy}>{busy ? "保存中…" : "立即保存"}</Button></DialogFooter></form></DialogContent></Dialog>;
 }
 
-export function QuickCreateDialog({ demo = false }: { demo?: boolean }) {
-  const open = useUiStore((state) => state.quickCreateOpen);
-  const setOpen = useUiStore((state) => state.setQuickCreateOpen);
-  const [input, setInput] = useState("");
-  const [selected, setSelected] = useState<(typeof types)[number]["id"]>("task");
-  const [previewing, setPreviewing] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const validation = useMemo(() => commandSchema.safeParse(input), [input]);
-  const preview = inferPreview(input, selected);
-
-  const reset = () => {
-    setInput("");
-    setPreviewing(false);
-    setSaved(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) reset(); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>快速创建</DialogTitle>
-          <DialogDescription>先识别和确认，再写入对应模块。当前不会调用 AI。</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4 px-6 py-5">
-          <div className="flex gap-2 overflow-x-auto scrollbar-none" role="list" aria-label="记录类型">
-            {types.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button key={item.id} type="button" onClick={() => setSelected(item.id)} className={cn("flex min-h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-sm text-muted", selected === item.id && "border-primary bg-surface-raised text-foreground")}>
-                  <Icon aria-hidden="true" className="size-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-          <textarea
-            autoFocus
-            aria-label="快速创建内容"
-            className="min-h-28 resize-none border-0 border-b border-line-strong bg-transparent py-3 text-lg outline-none placeholder:text-subtle"
-            placeholder="例如：明天下午完成季度复盘"
-            value={input}
-            onChange={(event) => { setInput(event.target.value); setPreviewing(false); setSaved(false); }}
-          />
-          {!validation.success && input ? <p className="text-xs text-danger">{validation.error.issues[0]?.message}</p> : null}
-
-          <AnimatePresence mode="wait">
-            {previewing ? (
-              <motion.section key="preview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="border-l-2 border-accent bg-accent-soft/55 p-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-accent">
-                  <Sparkles aria-hidden="true" className="size-4" />
-                  操作确认卡
-                </div>
-                <dl className="mt-3 grid grid-cols-[88px_1fr] gap-y-2 text-sm">
-                  <dt className="text-muted">识别类型</dt><dd>{preview.type}</dd>
-                  <dt className="text-muted">提取内容</dt><dd>{preview.content}</dd>
-                  <dt className="text-muted">待确认</dt><dd>{preview.pending}</dd>
-                </dl>
-                <p className="mt-3 text-xs text-muted">{demo ? "演示模式：确认后仅更新本地界面。" : "确认后写入当前个人空间。"}</p>
-              </motion.section>
-            ) : null}
-          </AnimatePresence>
-        </div>
-        <DialogFooter>
-          {saved ? <span className="mr-auto flex items-center gap-2 text-sm text-success"><Check aria-hidden="true" className="size-4" />已记录到演示列表</span> : null}
-          <Button variant="outline" onClick={() => setOpen(false)}>取消</Button>
-          {previewing ? (
-            <Button disabled={saved} onClick={() => setSaved(true)}>确认创建</Button>
-          ) : (
-            <Button disabled={!validation.success} onClick={() => setPreviewing(true)}>生成确认卡</Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+function QuickFields({ selected, accounts }: { selected: QuickType; accounts: { id: string; name: string }[] }) {
+  if (selected === "task") return <><FormField label="任务标题"><Input name="title" autoFocus required placeholder="下一步要完成什么" /></FormField><FormField label="领域"><Select name="area"><option value="WORK">工作</option><option value="LIFE">生活</option></Select></FormField></>;
+  if (selected === "expense" || selected === "income") return <><FormField label={selected === "expense" ? "用途" : "来源"}><Input name="title" autoFocus placeholder={selected === "expense" ? "例如：午餐" : "例如：工资"} /></FormField><div className="grid gap-4 sm:grid-cols-2"><FormField label="账户"><Select name="accountId" required><option value="">请选择</option>{accounts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></FormField><FormField label="金额"><Input name="amount" type="number" min="0.01" step="0.01" required /></FormField></div>{!accounts.length ? <p className="text-xs text-accent">请先到财务中心创建账户。</p> : null}</>;
+  if (selected === "water") return <FormField label="饮水量（ml）"><Input name="amount" autoFocus type="number" min="50" step="50" defaultValue="250" required /></FormField>;
+  return <><FormField label="笔记标题"><Input name="title" autoFocus required /></FormField><FormField label="内容"><Textarea name="content" /></FormField></>;
 }

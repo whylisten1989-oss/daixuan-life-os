@@ -2,160 +2,93 @@
 
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "motion/react";
-import { Bot, Check, ChevronRight, Circle, Droplets, Eye, EyeOff, MoonStar, Pencil, Plus, Sparkles, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowRight, Bot, CalendarClock, Check, ChevronRight, Circle, Clock3, Droplets, Eye, EyeOff, HeartPulse, Pencil, Plus, Settings2, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import { TaskEditorDialog } from "@/components/task/task-editor-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { todayTasks } from "@/data/demo";
+import { useFinance } from "@/hooks/use-finance";
+import { useHealth, useHealthActions } from "@/hooks/use-health";
+import { useProjects, useTaskActions, useTasks } from "@/hooks/use-tasks";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { addToDate, formatCurrentDate, formatDateTime, isToday, localDateKey } from "@/lib/date";
 import { formatCurrency } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
-import type { DemoTask } from "@/types/dashboard";
-import { SignalMeter } from "./signal-meter";
+import type { FinanceData, HealthData, TaskRecord } from "@/types/life";
 
-const CashFlowChart = dynamic(() => import("./cash-flow-chart"), {
-  ssr: false,
-  loading: () => <div className="h-full animate-pulse bg-surface-sunken" aria-label="图表加载中" />,
-});
+const TaskTrend = dynamic(() => import("./task-trend"), { ssr: false, loading: () => <div className="h-32 animate-pulse bg-surface-raised" /> });
+const emptyFinance: FinanceData = { accounts: [], categories: [], transactions: [], budgets: [], recurringExpenses: [], subscriptions: [], creditCards: [], loans: [], savingsGoals: [], purchasePlans: [], salarySetting: null, debtPayments: [] };
+const emptyHealth: HealthData = { sleepLogs: [], waterLogs: [], workoutLogs: [], dailyCheckins: [], goals: [] };
 
-const categoryTone: Record<DemoTask["category"], string> = {
-  工作: "text-accent border-accent/30 bg-accent-soft",
-  健康: "text-success border-success/30 bg-success/10",
-  成长: "text-primary border-primary/30 bg-primary/10",
-  生活: "text-muted border-border bg-surface-raised",
-  复盘: "text-accent border-accent/30 bg-accent-soft",
-};
-
-export function TodayScreen({ demo = false }: { demo?: boolean }) {
-  const [tasks, setTasks] = useState(todayTasks);
-  const [water, setWater] = useState(1500);
-  const amountsHidden = useUiStore((state) => state.amountsHidden);
+export function TodayScreen() {
+  const workspace = useWorkspace();
+  const tasksQuery = useTasks(workspace.data?.spaceId);
+  const projectsQuery = useProjects(workspace.data?.spaceId);
+  const financeQuery = useFinance(workspace.data?.spaceId);
+  const healthQuery = useHealth(workspace.data?.spaceId);
+  const taskActions = useTaskActions(workspace.data?.spaceId);
+  const healthActions = useHealthActions(workspace.data?.spaceId);
+  const hidden = useUiStore((state) => state.amountsHidden);
   const toggleAmounts = useUiStore((state) => state.toggleAmounts);
   const setQuickCreateOpen = useUiStore((state) => state.setQuickCreateOpen);
-  const completed = tasks.filter((task) => task.status === "done").length;
-  const orderedTasks = useMemo(() => [...tasks].sort((a, b) => Number(a.status === "done") - Number(b.status === "done")), [tasks]);
+  const [selected, setSelected] = useState<TaskRecord | null>(null);
+  const [referenceNow] = useState(() => Date.now());
+  const tasks = tasksQuery.data ?? [];
+  const projects = projectsQuery.data ?? [];
+  const finance = financeQuery.data ?? emptyFinance;
+  const health = healthQuery.data ?? emptyHealth;
+  const todayTasks = tasks.filter((task) => task.status !== "CANCELLED" && (isToday(task.due_at) || isToday(task.scheduled_at)));
+  const timeline = todayTasks.filter((task) => task.scheduled_at).sort((a, b) => String(a.scheduled_at).localeCompare(String(b.scheduled_at)));
+  const unscheduled = todayTasks.filter((task) => !task.scheduled_at && !task.parent_id);
+  const followups = tasks.filter((task) => task.status === "WAITING" || (task.next_follow_up_at && new Date(task.next_follow_up_at) <= new Date())).slice(0, 4);
+  const completed = todayTasks.filter((task) => task.status === "COMPLETED").length;
+  const important = [...todayTasks].filter((task) => task.status !== "COMPLETED").sort((a, b) => priorityScore(b) - priorityScore(a) || String(a.due_at).localeCompare(String(b.due_at)))[0];
+  const estimate = todayTasks.reduce((sum, task) => sum + (task.estimate_minutes ?? 0), 0);
+  const actual = todayTasks.reduce((sum, task) => sum + (task.actual_minutes ?? 0), 0);
+  const month = localDateKey().slice(0, 7);
+  const monthTransactions = finance.transactions.filter((item) => item.occurred_at.startsWith(month));
+  const income = monthTransactions.filter((item) => item.type === "INCOME").reduce((sum, item) => sum + Number(item.amount), 0);
+  const expense = monthTransactions.filter((item) => item.type === "EXPENSE").reduce((sum, item) => sum + Number(item.amount), 0);
+  const budgets = finance.budgets.filter((item) => String(item.month).startsWith(month)).reduce((sum, item) => sum + Number(item.amount), 0);
+  const water = health.waterLogs.filter((item) => localDateKey(new Date(item.recorded_at)) === localDateKey()).reduce((sum, item) => sum + item.amount_ml, 0);
+  const latestSleep = health.sleepLogs[0];
+  const latestCheckin = health.dailyCheckins.find((item) => item.date === localDateKey()) ?? health.dailyCheckins[0];
+  const bills = [...finance.recurringExpenses, ...finance.subscriptions, ...finance.loans].sort((a, b) => String(a.next_due_at ?? a.next_payment_at).localeCompare(String(b.next_due_at ?? b.next_payment_at))).slice(0, 3);
+  const weeklyWorkoutCount = health.workoutLogs.filter((item) => referenceNow - new Date(item.started_at).getTime() < 7 * 86400000).length;
 
-  const toggleTask = (id: string) => {
-    setTasks((current) => current.map((task) => task.id === id ? { ...task, status: task.status === "done" ? "todo" : "done" } : task));
-  };
+  if (workspace.isLoading || tasksQuery.isLoading) return <div className="app-page"><div className="h-72 animate-pulse bg-surface-raised" /></div>;
 
-  return (
-    <div className="mx-auto w-full max-w-[1540px] px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
-      {demo ? (
-        <div className="mb-5 flex items-center justify-between border-l-2 border-accent bg-accent-soft/50 px-4 py-3 text-sm">
-          <span>这是独立生成的演示数据，不会写入 Supabase。</span>
-          <a href="/login" className="shrink-0 whitespace-nowrap font-medium text-accent hover:underline">进入登录</a>
-        </div>
-      ) : null}
+  return <div className="app-page today-layout">
+    <section className="today-hero">
+      <div><p className="today-date">{formatCurrentDate()}</p><h1>{greeting()}，{workspace.data?.displayName}</h1><p>先推进最重要的动作，再处理进入系统的其他事项。</p></div>
+      <div className="today-priority"><div className="flex items-center gap-2 text-xs font-medium text-accent"><Sparkles className="size-4" />今天最重要的一件事</div>{important ? <button type="button" onClick={() => setSelected(important)} className="mt-3 flex w-full items-start gap-3 text-left"><span className="mt-1 flex size-6 items-center justify-center border border-line-strong"><Circle className="size-3" /></span><span className="min-w-0 flex-1"><strong>{important.title}</strong><small>{important.description || (important.estimate_minutes ? `预计 ${important.estimate_minutes} 分钟` : "点击补充完成标准")}</small></span><Pencil className="size-4 text-muted" /></button> : <button type="button" className="mt-3 text-left text-sm text-muted" onClick={() => setQuickCreateOpen(true)}>今天还没有重点任务，创建一个明确动作。</button>}</div>
+    </section>
+    <section className="ai-command-line"><Bot className="size-4 text-primary" /><span className="min-w-0 flex-1">AI 服务尚未配置</span><span className="hidden text-xs text-muted sm:inline">配置后可将自然语言转换为待确认操作</span><Button asChild variant="ghost" size="sm"><Link href="/settings"><Settings2 data-icon="inline-start" />设置</Link></Button></section>
 
-      <section className="grid border-b border-line-strong pb-7 lg:grid-cols-[0.72fr_1.28fr] lg:gap-12">
-        <div>
-          <p className="text-xs tracking-[0.16em] text-muted">2026年8月2日 · 星期日</p>
-          <h1 className="mt-3 text-3xl font-medium tracking-tight sm:text-4xl">早上好，岱旋</h1>
-          <p className="mt-2 text-sm text-muted">先完成关键动作，再处理进入系统的杂音。</p>
-        </div>
-        <div className="mt-7 border-l-2 border-accent pl-5 lg:mt-0">
-          <div className="flex items-center gap-2 text-xs font-medium text-accent"><Sparkles aria-hidden="true" className="size-4" />今天最重要的一件事</div>
-          <div className="mt-3 flex items-start gap-3">
-            <button aria-label="完成最重要的任务" className="mt-1 flex size-6 shrink-0 items-center justify-center rounded-sm border border-line-strong hover:border-primary" type="button"><Circle className="size-3" /></button>
-            <div className="min-w-0 flex-1">
-              <p className="text-xl font-medium">完成产品需求评审</p>
-              <p className="mt-1 text-sm text-muted">聚焦 90 分钟，输出下一阶段清晰边界。</p>
-            </div>
-            <Button variant="ghost" size="icon" aria-label="编辑最重要的任务"><Pencil /></Button>
-          </div>
-        </div>
-      </section>
+    <div className="mt-7 grid gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(350px,0.85fr)]">
+      <main className="min-w-0 space-y-8">
+        <section><div className="section-heading"><div><h2>今日时间轴</h2><p>{timeline.length} 项已安排具体时间</p></div><Button variant="ghost" size="sm" onClick={() => setQuickCreateOpen(true)}><Plus data-icon="inline-start" />添加事项</Button></div>{timeline.length ? <motion.ol layout className="timeline-list"><AnimatePresence initial={false}>{timeline.map((task) => <TimelineItem key={task.id} task={task} referenceNow={referenceNow} onOpen={() => setSelected(task)} onComplete={() => task.status === "COMPLETED" ? taskActions.update.mutate({ id: task.id, values: { status: "TODO", completed_at: null } }) : taskActions.complete.mutate(task)} onDelay={() => taskActions.update.mutate({ id: task.id, values: { scheduled_at: addToDate(task.scheduled_at, 1, "day"), due_at: task.due_at ? addToDate(task.due_at, 1, "day") : null } })} />)}</AnimatePresence></motion.ol> : <div className="empty-panel"><CalendarClock className="size-6 text-primary" /><p>今天还没有按时间安排的事项</p></div>}</section>
+        <section><div className="section-heading"><div><h2>未安排具体时间</h2><p>今天要完成，但保留时间弹性</p></div><span>{unscheduled.length} 项</span></div><TaskList tasks={unscheduled} onOpen={setSelected} onComplete={(task) => taskActions.complete.mutate(task)} /></section>
+        <section><div className="section-heading"><div><h2>待跟进事项</h2><p>等待外部反馈或已到跟进时间</p></div><Link href="/tasks" className="text-xs text-primary">查看全部</Link></div><TaskList tasks={followups} onOpen={setSelected} onComplete={(task) => taskActions.complete.mutate(task)} empty="没有需要跟进的事项" /></section>
+        <section className="progress-ledger"><div><span>今日完成进度</span><strong>{todayTasks.length ? Math.round(completed / todayTasks.length * 100) : 0}%</strong><div><i style={{ width: `${todayTasks.length ? completed / todayTasks.length * 100 : 0}%` }} /></div></div><div><span>预计用时</span><strong>{formatMinutes(estimate)}</strong></div><div><span>实际用时</span><strong>{formatMinutes(actual)}</strong></div></section>
+      </main>
 
-      <div className="mt-7 grid gap-7 xl:grid-cols-[1.08fr_0.92fr] xl:gap-8">
-        <section aria-labelledby="timeline-title" className="min-w-0">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div className="flex items-baseline gap-3">
-              <h2 id="timeline-title" className="text-lg font-semibold">今日时间轴</h2>
-              <span className="text-xs text-muted">{completed}/{tasks.length} 已完成</span>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setQuickCreateOpen(true)}><Plus data-icon="inline-start" />添加事项</Button>
-          </div>
-
-          <motion.ol layout className="relative mt-2">
-            <span aria-hidden="true" className="absolute bottom-6 left-[75px] top-6 w-px bg-line-strong sm:left-[92px]" />
-            <AnimatePresence initial={false}>
-              {orderedTasks.map((task) => (
-                <motion.li layout key={task.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="group grid grid-cols-[58px_34px_minmax(0,1fr)] items-start py-3 sm:grid-cols-[76px_34px_minmax(0,1fr)]">
-                  <div className="pt-0.5 text-right text-xs text-muted numeric">
-                    <span className={task.status === "active" ? "font-semibold text-accent" : ""}>{task.time}</span>
-                    <span className="mt-0.5 block text-[10px] text-subtle">{task.endTime}</span>
-                  </div>
-                  <button aria-label={task.status === "done" ? `撤销完成：${task.title}` : `完成：${task.title}`} onClick={() => toggleTask(task.id)} className="relative z-10 mx-auto flex size-6 items-center justify-center rounded-full border border-line-strong bg-background text-success transition-colors hover:border-primary" type="button">
-                    {task.status === "done" ? <Check aria-hidden="true" className="size-3.5" /> : task.status === "active" ? <span className="size-2 rounded-full bg-accent" /> : <span className="size-1.5 rounded-full bg-subtle" />}
-                  </button>
-                  <div className="min-w-0 border-b border-border pb-3 pl-2 sm:flex sm:items-start sm:justify-between sm:gap-3">
-                    <div className="min-w-0">
-                      <p className={task.status === "done" ? "truncate text-sm text-muted line-through" : "truncate text-sm font-medium"}>{task.title}</p>
-                      <p className="mt-1 truncate text-xs text-muted">{task.detail}</p>
-                    </div>
-                    <Badge className={`mt-2 sm:mt-0 ${categoryTone[task.category]}`}>{task.category}</Badge>
-                  </div>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </motion.ol>
-        </section>
-
-        <aside className="flex min-w-0 flex-col gap-3">
-          <section className="border border-border bg-surface">
-            <header className="flex items-center justify-between border-b border-border px-5 py-4">
-              <div><h2 className="font-semibold">财务信号</h2><p className="text-xs text-muted">2026 年 8 月</p></div>
-              <Button variant="ghost" size="icon" aria-label={amountsHidden ? "显示金额" : "隐藏金额"} onClick={toggleAmounts}>{amountsHidden ? <EyeOff /> : <Eye />}</Button>
-            </header>
-            <div className="grid grid-cols-3 divide-x divide-border px-2 py-4">
-              <Metric label="月收入" value={formatCurrency(28600, amountsHidden)} tone="success" />
-              <Metric label="月支出" value={formatCurrency(12850, amountsHidden)} tone="accent" />
-              <Metric label="剩余预算" value={formatCurrency(15750, amountsHidden)} />
-            </div>
-            <div className="signal-grid h-36 border-t border-border px-3 pt-2"><CashFlowChart /></div>
-          </section>
-
-          <section className="border border-border bg-surface">
-            <header className="flex items-center justify-between border-b border-border px-5 py-4">
-              <div><h2 className="font-semibold">身体信号</h2><p className="text-xs text-muted">今天 · 状态稳定</p></div>
-              <ChevronRight aria-hidden="true" className="size-4 text-subtle" />
-            </header>
-            <div className="grid grid-cols-2 gap-5 px-5 py-5 sm:grid-cols-4">
-              <HealthStat icon={MoonStar} label="睡眠" value="7h 24m" detail="质量良好" />
-              <HealthStat icon={Droplets} label="饮水" value={`${(water / 1000).toFixed(2)}L`} detail="目标 2.5L" />
-              <SignalMeter value={72} label="精力稳定" />
-              <SignalMeter value={84} label="心情平和" tone="accent" />
-            </div>
-            <div className="flex items-center justify-between border-t border-border px-5 py-3">
-              <p className="text-xs text-muted">本周运动 4/5 次 · 压力 3/10</p>
-              <Button variant="outline" size="sm" onClick={() => setWater((value) => Math.min(3000, value + 250))}><Droplets data-icon="inline-start" />+250ml</Button>
-            </div>
-          </section>
-
-          <section className="flex items-center gap-4 border border-border bg-surface px-5 py-5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-full border border-dashed border-line-strong text-muted"><Bot aria-hidden="true" /></div>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-semibold">AI 服务尚未配置</h2>
-              <p className="mt-1 text-xs text-muted">未来接入 DeepSeek；任何写操作都先生成确认卡。</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>试用确认流程</Button>
-          </section>
-        </aside>
-      </div>
-
-      <footer className="mt-7 grid gap-4 border-t border-line-strong pt-5 text-xs text-muted sm:grid-cols-3">
-        <span className="flex items-center gap-2"><Zap aria-hidden="true" className="size-4 text-accent" />今日专注 1h 12m</span>
-        <span>今日剩余可安排 6h 38m</span>
-        <span>累计完成 {completed}/{tasks.length}</span>
-      </footer>
+      <aside className="space-y-5">
+        <section className="summary-surface"><header><div><h2>财务摘要</h2><p>{new Date().getMonth() + 1} 月</p></div><Button size="icon" variant="ghost" aria-label={hidden ? "显示金额" : "隐藏金额"} onClick={toggleAmounts}>{hidden ? <EyeOff /> : <Eye />}</Button></header><div className="grid grid-cols-3 gap-3 px-4 py-5"><SummaryValue label="收入" value={formatCurrency(income, hidden)} tone="success" /><SummaryValue label="支出" value={formatCurrency(expense, hidden)} tone="accent" /><SummaryValue label="剩余预算" value={formatCurrency(Math.max(0, budgets - expense), hidden)} /></div><Link href="/finance" className="summary-link">进入财务中心<ArrowRight /></Link></section>
+        <section className="summary-surface"><header><div><h2>健康摘要</h2><p>今天</p></div><HeartPulse className="size-4 text-primary" /></header><div className="health-summary-grid"><SummaryValue label="昨晚睡眠" value={latestSleep ? `${((new Date(latestSleep.wake_at).getTime() - new Date(latestSleep.sleep_at).getTime()) / 3600000).toFixed(1)}h` : "—"} /><SummaryValue label="饮水" value={`${(water / 1000).toFixed(2)}L`} /><SummaryValue label="精力" value={latestCheckin ? `${latestCheckin.energy}/5` : "—"} /><SummaryValue label="本周运动" value={`${weeklyWorkoutCount} 次`} /></div><div className="border-t border-border px-4 py-3"><Button size="sm" variant="outline" onClick={() => healthActions.save.mutate({ table: "water_logs", values: { amount_ml: 250, recorded_at: new Date().toISOString() } })}><Droplets data-icon="inline-start" />+250ml</Button></div></section>
+        <section className="summary-surface"><header><div><h2>近期账单与还款</h2><p>下一步需要准备的资金</p></div></header>{bills.length ? <ul className="divide-y divide-border px-4">{bills.map((bill) => <li key={String(bill.id)} className="data-row"><span><strong>{String(bill.name ?? "贷款还款")}</strong><small>{String(bill.next_due_at ?? bill.next_payment_at)}</small></span><b>{formatCurrency(Number(bill.amount ?? bill.monthly_payment), hidden)}</b></li>)}</ul> : <div className="px-4 pb-5 text-sm text-muted">没有即将到期的账单</div>}</section>
+        <section className="summary-surface"><header><div><h2>本周任务趋势</h2><p>最近七天完成数</p></div><ChevronRight className="size-4 text-muted" /></header><div className="px-3 pb-3"><TaskTrend tasks={tasks} /></div></section>
+      </aside>
     </div>
-  );
+    <TaskEditorDialog key={selected?.id ?? "closed"} open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }} spaceId={workspace.data?.spaceId} projects={projects} task={selected} />
+  </div>;
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: "success" | "accent" }) {
-  return <div className="px-3"><p className="text-[11px] text-muted">{label}</p><p className={`mt-1 truncate text-lg font-medium numeric ${tone === "success" ? "text-success" : tone === "accent" ? "text-accent" : ""}`}>{value}</p></div>;
-}
-
-function HealthStat({ icon: Icon, label, value, detail }: { icon: typeof MoonStar; label: string; value: string; detail: string }) {
-  return <div><div className="flex items-center gap-2 text-xs text-muted"><Icon aria-hidden="true" className="size-4" />{label}</div><p className="mt-2 text-lg font-medium numeric">{value}</p><p className="mt-1 text-[11px] text-success">{detail}</p></div>;
-}
+function TimelineItem({ task, referenceNow, onOpen, onComplete, onDelay }: { task: TaskRecord; referenceNow: number; onOpen: () => void; onComplete: () => void; onDelay: () => void }) { const active = isCurrent(task, referenceNow); return <motion.li layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`timeline-item ${task.status === "COMPLETED" ? "is-done" : ""} ${active ? "is-current" : ""}`}><time>{task.scheduled_at ? new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(task.scheduled_at)) : "—"}</time><button className="timeline-node" aria-label={task.status === "COMPLETED" ? "恢复任务" : "完成任务"} onClick={onComplete} type="button">{task.status === "COMPLETED" ? <Check /> : <span />}</button><button type="button" onClick={onOpen} className="timeline-content"><strong>{task.title}</strong><small>{task.estimate_minutes ? `预计 ${task.estimate_minutes} 分钟` : task.description || "点击查看详情"}</small></button><div className="timeline-actions"><Button size="sm" variant="ghost" onClick={onDelay}>延期</Button><Button size="icon" variant="ghost" onClick={onOpen} aria-label="调整时间"><Clock3 /></Button></div></motion.li>; }
+function TaskList({ tasks, onOpen, onComplete, empty = "今天没有未安排时间的任务" }: { tasks: TaskRecord[]; onOpen: (task: TaskRecord) => void; onComplete: (task: TaskRecord) => void; empty?: string }) { if (!tasks.length) return <div className="py-5 text-sm text-muted">{empty}</div>; return <ul className="divide-y divide-border">{tasks.map((task) => <li key={task.id} className="compact-task"><button className="task-check" onClick={() => onComplete(task)} type="button"><Circle /></button><button className="min-w-0 flex-1 text-left" onClick={() => onOpen(task)} type="button"><strong>{task.title}</strong><small>{task.waiting_for ? `等待：${task.waiting_for}` : task.due_at ? `截止 ${formatDateTime(task.due_at)}` : task.description || "无具体时间"}</small></button><Badge>{task.area === "WORK" ? "工作" : "生活"}</Badge></li>)}</ul>; }
+function SummaryValue({ label, value, tone }: { label: string; value: string; tone?: "success" | "accent" }) { return <div><p className="text-[11px] text-muted">{label}</p><p className={`mt-1 truncate font-medium numeric ${tone === "success" ? "text-success" : tone === "accent" ? "text-accent" : ""}`}>{value}</p></div>; }
+function greeting() { const hour = new Date().getHours(); return hour < 6 ? "夜深了" : hour < 11 ? "早上好" : hour < 14 ? "中午好" : hour < 18 ? "下午好" : "晚上好"; }
+function priorityScore(task: TaskRecord) { return { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3, URGENT: 4 }[task.priority]; }
+function formatMinutes(minutes: number) { return `${Math.floor(minutes / 60)}h ${minutes % 60}m`; }
+function isCurrent(task: TaskRecord, referenceNow: number) { if (!task.scheduled_at || task.status === "COMPLETED") return false; const start = new Date(task.scheduled_at).getTime(); const end = start + (task.estimate_minutes ?? 60) * 60000; return referenceNow >= start && referenceNow <= end; }

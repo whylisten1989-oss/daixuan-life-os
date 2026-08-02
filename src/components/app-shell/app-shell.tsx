@@ -8,7 +8,7 @@ import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { useUiStore } from "@/store/ui-store";
 
-export function AppShell({ children, demo = false }: { children: ReactNode; demo?: boolean }) {
+export function AppShell({ children }: { children: ReactNode }) {
   const setQuickCreateOpen = useUiStore((state) => state.setQuickCreateOpen);
 
   useEffect(() => {
@@ -24,11 +24,11 @@ export function AppShell({ children, demo = false }: { children: ReactNode; demo
 
   return (
     <TooltipProvider delayDuration={400}>
-      <Sidebar demo={demo} />
-      <Topbar demo={demo} />
+      <Sidebar />
+      <Topbar />
       <main className="min-h-[calc(100vh-4rem)] pb-24 lg:ml-[208px] lg:pb-0">{children}</main>
-      <MobileNav demo={demo} />
-      <QuickCreateDialog demo={demo} />
+      <MobileNav />
+      <QuickCreateDialog />
     </TooltipProvider>
   );
 }

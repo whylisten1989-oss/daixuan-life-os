@@ -2,7 +2,6 @@
 
 import { motion } from "motion/react";
 import { ArrowRight, LockKeyhole, Mountain } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { z } from "zod";
@@ -22,6 +21,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [status, setStatus] = useState<string>("");
   const [pending, setPending] = useState(false);
 
@@ -33,7 +33,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
       return;
     }
     if (!configured) {
-      setStatus("Supabase 尚未配置，请先查看演示界面。");
+      setStatus("Supabase 尚未配置，请联系管理员。");
       return;
     }
 
@@ -42,7 +42,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
     const supabase = createClient();
     const result = mode === "login"
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
+      : await supabase.auth.signUp({ email, password, options: { data: { display_name: displayName.trim() } } });
     setPending(false);
 
     if (result.error) {
@@ -50,7 +50,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
       return;
     }
     if (mode === "signup" && !result.data.session) {
-      setStatus("注册成功，请检查邮箱后完成验证。");
+      setStatus("注册成功，请直接登录。");
       return;
     }
     router.push("/today");
@@ -64,7 +64,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
       return;
     }
     if (!configured) {
-      setStatus("Supabase 尚未配置，请先查看演示界面。");
+      setStatus("Supabase 尚未配置，请联系管理员。");
       return;
     }
 
@@ -98,16 +98,16 @@ export function LoginForm({ configured }: { configured: boolean }) {
           <LockKeyhole className="size-6 text-primary" />
           <h2 className="mt-5 text-3xl font-semibold">{mode === "login" ? "回到个人空间" : "创建个人空间"}</h2>
           <p className="mt-2 text-sm text-muted">登录后只访问你所属空间的数据。</p>
-          {!configured ? <div className="mt-6 border-l-2 border-accent bg-accent-soft/55 px-4 py-3 text-sm"><p className="font-medium text-accent">Supabase 尚未配置</p><p className="mt-1 text-xs text-muted">云项目完成后启用真实登录；当前可先进入演示界面。</p></div> : null}
+          {!configured ? <div className="mt-6 border-l-2 border-accent bg-accent-soft/55 px-4 py-3 text-sm"><p className="font-medium text-accent">Supabase 尚未配置</p><p className="mt-1 text-xs text-muted">请联系管理员完成服务配置。</p></div> : null}
           <form className="mt-7 flex flex-col gap-5" onSubmit={submit}>
+            {mode === "signup" ? <div className="flex flex-col gap-2"><Label htmlFor="displayName">姓名</Label><Input id="displayName" autoComplete="name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="你的姓名" required /></div> : null}
             <div className="flex flex-col gap-2"><Label htmlFor="email">邮箱</Label><Input id="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></div>
             <div className="flex flex-col gap-2"><Label htmlFor="password">密码</Label><Input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" /></div>
             {status ? <p role="status" className="text-sm text-accent">{status}</p> : null}
             <Button size="lg" type="submit" disabled={pending}>{pending ? "处理中…" : mode === "login" ? "登录" : "注册"}<ArrowRight data-icon="inline-end" /></Button>
           </form>
-          <div className="mt-5 flex items-center justify-between gap-4 text-sm">
+          <div className="mt-5 flex items-center text-sm">
             <button className="text-left text-muted hover:text-foreground" type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setStatus(""); }}>{mode === "login" ? "没有账户？注册" : "已有账户？登录"}</button>
-            <Link href="/demo" className="font-medium text-primary hover:underline">查看演示</Link>
           </div>
           {mode === "login" ? <button className="mt-4 text-sm text-muted underline-offset-4 hover:text-foreground hover:underline" type="button" disabled={pending} onClick={requestPasswordReset}>忘记密码</button> : null}
         </motion.div>

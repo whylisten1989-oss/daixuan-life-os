@@ -22,11 +22,17 @@ enum SpaceRole {
 
 enum TaskStatus {
   INBOX
+  PLANNED
   TODO
   IN_PROGRESS
   WAITING
   COMPLETED
   CANCELLED
+}
+
+enum TaskArea {
+  WORK
+  LIFE
 }
 
 enum TaskPriority {
@@ -41,10 +47,18 @@ enum AccountType {
   CASH
   CHECKING
   SAVINGS
+  WECHAT
+  ALIPAY
   CREDIT_CARD
   LOAN
   INVESTMENT
+  CUSTOM
   OTHER
+}
+
+enum DebtPaymentKind {
+  CREDIT_CARD
+  LOAN
 }
 
 enum TransactionType {
@@ -103,6 +117,8 @@ model Space {
   loans       Loan[]
   savingsGoals SavingsGoal[]
   purchasePlans PurchasePlan[]
+  salarySettings SalarySetting[]
+  debtPayments DebtPayment[]
   sleepLogs   SleepLog[]
   waterLogs   WaterLog[]
   workoutLogs WorkoutLog[]
@@ -153,6 +169,7 @@ model Task {
   parentId         String?      @map("parent_id") @db.Uuid
   title            String
   description      String?
+  area             TaskArea     @default(LIFE)
   status           TaskStatus   @default(INBOX)
   priority         TaskPriority @default(NONE)
   dueAt            DateTime?    @map("due_at") @db.Timestamptz(6)
@@ -160,7 +177,11 @@ model Task {
   estimateMinutes  Int?         @map("estimate_minutes")
   actualMinutes    Int?         @map("actual_minutes")
   recurrenceRule   Json?        @map("recurrence_rule")
+  tags             String[]     @default([])
   waitingFor       String?      @map("waiting_for")
+  nextFollowUpAt   DateTime?    @map("next_follow_up_at") @db.Timestamptz(6)
+  startedAt        DateTime?    @map("started_at") @db.Timestamptz(6)
+  endedAt          DateTime?    @map("ended_at") @db.Timestamptz(6)
   completedAt      DateTime?    @map("completed_at") @db.Timestamptz(6)
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -171,6 +192,8 @@ model Task {
 
   @@index([spaceId, status, dueAt])
   @@index([spaceId, projectId])
+  @@index([spaceId, area, status])
+  @@index([spaceId, nextFollowUpAt])
   @@index([parentId])
   @@map("tasks")
 }
@@ -189,9 +212,51 @@ model Account {
   transactions    Transaction[]
   creditCard      CreditCard?
   loan            Loan?
+  salarySettings SalarySetting[]
+  debtAccounts    DebtPayment[] @relation("DebtAccount")
+  repaymentSources DebtPayment[] @relation("RepaymentSource")
 
   @@index([spaceId, type])
   @@map("accounts")
+}
+
+model SalarySetting {
+  id                String    @id @default(uuid()) @db.Uuid
+  spaceId           String    @map("space_id") @db.Uuid
+  accountId         String    @map("account_id") @db.Uuid
+  amount            Decimal   @db.Decimal(14, 2)
+  payDay            Int       @map("pay_day")
+  isActive          Boolean   @default(true) @map("is_active")
+  lastReceivedMonth DateTime? @map("last_received_month") @db.Date
+  lastReceivedAt    DateTime? @map("last_received_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  space             Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([spaceId])
+  @@index([accountId])
+  @@map("salary_settings")
+}
+
+model DebtPayment {
+  id              String          @id @default(uuid()) @db.Uuid
+  spaceId         String          @map("space_id") @db.Uuid
+  accountId       String          @map("account_id") @db.Uuid
+  fromAccountId   String          @map("from_account_id") @db.Uuid
+  kind            DebtPaymentKind
+  amount          Decimal         @db.Decimal(14, 2)
+  paidAt          DateTime        @map("paid_at") @db.Timestamptz(6)
+  note            String?
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  space           Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  account         Account         @relation("DebtAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  fromAccount     Account         @relation("RepaymentSource", fields: [fromAccountId], references: [id], onDelete: Restrict)
+
+  @@index([spaceId, paidAt])
+  @@index([accountId])
+  @@index([fromAccountId])
+  @@map("debt_payments")
 }
 
 model FinanceCategory {
@@ -376,6 +441,8 @@ model WorkoutLog {
   durationMinutes Int      @map("duration_minutes")
   intensity       Int?
   calories        Int?
+  steps           Int?
+  feeling         Int?
   startedAt       DateTime @map("started_at") @db.Timestamptz(6)
   note            String?
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -392,6 +459,8 @@ model DailyCheckin {
   energy      Int
   mood        Int
   stress      Int
+  steps       Int?
+  weightKg    Decimal? @map("weight_kg") @db.Decimal(6, 2)
   note        String?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
