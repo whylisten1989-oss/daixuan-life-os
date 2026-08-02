@@ -10,13 +10,14 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-未配置 Supabase 时，登录页和 `/demo` 视觉演示仍可访问；真实数据路由会显示配置提示。
+未配置 Supabase 时，登录页和 `/demo` 视觉演示仍可访问；受保护路由会回到登录页。云端只在 Vercel Preview 环境配置 Supabase publishable 参数，不需要也不得向客户端提供 service role key。
 
 ## 质量检查
 
 ```bash
 pnpm lint
 pnpm typecheck
+pnpm prisma:validate
 pnpm build
 ```
 

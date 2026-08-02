@@ -11,7 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
-const credentialsSchema = z.object({ email: z.email("请输入有效邮箱"), password: z.string().min(8, "密码至少 8 位") });
+const credentialsSchema = z.object({
+  email: z.email("请输入有效邮箱"),
+  password: z.string().min(8, "密码至少 8 位"),
+});
+const emailSchema = z.email("请输入有效邮箱");
 
 export function LoginForm({ configured }: { configured: boolean }) {
   const router = useRouter();
@@ -24,24 +28,68 @@ export function LoginForm({ configured }: { configured: boolean }) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     const validation = credentialsSchema.safeParse({ email, password });
-    if (!validation.success) { setStatus(validation.error.issues[0]?.message ?? "输入有误"); return; }
-    if (!configured) { setStatus("Supabase 尚未配置，请先查看演示界面。"); return; }
+    if (!validation.success) {
+      setStatus(validation.error.issues[0]?.message ?? "输入有误");
+      return;
+    }
+    if (!configured) {
+      setStatus("Supabase 尚未配置，请先查看演示界面。");
+      return;
+    }
+
     setPending(true);
     setStatus("");
     const supabase = createClient();
-    const result = mode === "login" ? await supabase.auth.signInWithPassword({ email, password }) : await supabase.auth.signUp({ email, password });
+    const result = mode === "login"
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
     setPending(false);
-    if (result.error) { setStatus(result.error.message); return; }
-    if (mode === "signup" && !result.data.session) { setStatus("注册成功，请检查邮箱后完成验证。"); return; }
+
+    if (result.error) {
+      setStatus(result.error.message);
+      return;
+    }
+    if (mode === "signup" && !result.data.session) {
+      setStatus("注册成功，请检查邮箱后完成验证。");
+      return;
+    }
     router.push("/today");
     router.refresh();
+  };
+
+  const requestPasswordReset = async () => {
+    const validation = emailSchema.safeParse(email);
+    if (!validation.success) {
+      setStatus(validation.error.issues[0]?.message ?? "请输入邮箱");
+      return;
+    }
+    if (!configured) {
+      setStatus("Supabase 尚未配置，请先查看演示界面。");
+      return;
+    }
+
+    setPending(true);
+    setStatus("");
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
+    setPending(false);
+    setStatus(error ? error.message : "如果该邮箱已注册，重置邮件将很快送达。");
   };
 
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
       <section className="relative hidden overflow-hidden border-r border-border bg-sidebar px-10 py-12 lg:flex lg:flex-col lg:justify-between">
-        <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-md border border-line-strong text-primary"><Mountain /></div><div><p className="font-semibold tracking-[0.08em]">岱旋 Life OS</p><p className="text-[10px] uppercase tracking-[0.22em] text-subtle">Daixuan</p></div></div>
-        <div className="max-w-xl"><p className="text-xs tracking-[0.16em] text-muted">个人生活管理与行动中枢</p><h1 className="mt-5 text-5xl font-medium leading-[1.12] tracking-tight">把分散的生活信号，<br />变成下一步行动。</h1><div className="mt-10 grid grid-cols-3 border-y border-border py-5 text-sm"><span>任务与时间</span><span>财务与健康</span><span>知识与确认</span></div></div>
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-md border border-line-strong text-primary"><Mountain /></div>
+          <div><p className="font-semibold tracking-[0.08em]">岱旋 Life OS</p><p className="text-[10px] uppercase tracking-[0.22em] text-subtle">Daixuan</p></div>
+        </div>
+        <div className="max-w-xl">
+          <p className="text-xs tracking-[0.16em] text-muted">个人生活管理与行动中枢</p>
+          <h1 className="mt-5 text-5xl font-medium leading-[1.12] tracking-tight">把分散的生活信号，<br />变成下一步行动。</h1>
+          <div className="mt-10 grid grid-cols-3 border-y border-border py-5 text-sm"><span>任务与时间</span><span>财务与健康</span><span>知识与确认</span></div>
+        </div>
         <p className="text-xs text-subtle">Private workspace · 数据按空间隔离</p>
       </section>
       <section className="flex items-center justify-center px-5 py-10 sm:px-10">
@@ -57,7 +105,11 @@ export function LoginForm({ configured }: { configured: boolean }) {
             {status ? <p role="status" className="text-sm text-accent">{status}</p> : null}
             <Button size="lg" type="submit" disabled={pending}>{pending ? "处理中…" : mode === "login" ? "登录" : "注册"}<ArrowRight data-icon="inline-end" /></Button>
           </form>
-          <div className="mt-5 flex items-center justify-between text-sm"><button className="text-muted hover:text-foreground" type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setStatus(""); }}>{mode === "login" ? "没有账户？注册" : "已有账户？登录"}</button><Link href="/demo" className="font-medium text-primary hover:underline">查看演示</Link></div>
+          <div className="mt-5 flex items-center justify-between gap-4 text-sm">
+            <button className="text-left text-muted hover:text-foreground" type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setStatus(""); }}>{mode === "login" ? "没有账户？注册" : "已有账户？登录"}</button>
+            <Link href="/demo" className="font-medium text-primary hover:underline">查看演示</Link>
+          </div>
+          {mode === "login" ? <button className="mt-4 text-sm text-muted underline-offset-4 hover:text-foreground hover:underline" type="button" disabled={pending} onClick={requestPasswordReset}>忘记密码</button> : null}
         </motion.div>
       </section>
     </main>

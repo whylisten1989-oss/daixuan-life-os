@@ -3,6 +3,7 @@
 import { Plus, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 import { useUiStore } from "@/store/ui-store";
 import { navItems } from "./nav-items";
@@ -27,6 +28,7 @@ export function Topbar({ demo = false }: { demo?: boolean }) {
       </div>
       {demo ? <span className="hidden rounded-sm border border-accent/40 bg-accent-soft px-2 py-1 text-[11px] text-accent sm:inline">演示数据</span> : null}
       <ThemeToggle />
+      {!demo ? <SignOutButton /> : null}
       <Button className="hidden sm:inline-flex" onClick={() => setQuickCreateOpen(true)}>
         <Plus data-icon="inline-start" />
         快速创建

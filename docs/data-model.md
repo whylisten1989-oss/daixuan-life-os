@@ -43,3 +43,5 @@
 
 - `202608020001_initial.sql`：由本项目 Prisma Schema 生成的基础结构。
 - `202608020002_security.sql`：Supabase 身份外键、注册初始化、数据库默认值、更新时间触发器、显式 Data API 权限与 RLS。
+- `202608020003_security_indexes.sql`：安全函数最小执行权限与外键覆盖索引。
+- `202608020004_authenticated_least_privilege.sql`：认证客户端只保留受 RLS 约束的 CRUD 表权限。
