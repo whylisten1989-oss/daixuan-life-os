@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <TooltipProvider delayDuration={400}>
       <Sidebar />
       <Topbar />
-      <main className="min-h-[calc(100vh-4rem)] pb-24 lg:ml-[208px] lg:pb-0">{children}</main>
+      <main className="min-h-[calc(100vh-4.25rem)] pb-24 lg:ml-[220px] lg:pb-0">{children}</main>
       <MobileNav />
       <QuickCreateDialog />
     </TooltipProvider>

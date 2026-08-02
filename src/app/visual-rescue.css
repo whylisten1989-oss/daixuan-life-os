@@ -1,0 +1,115 @@
+/*
+ * Visual Rescue Layer
+ * Original implementation for Daixuan Life OS.
+ * Design references: the user's accepted command-center concept,
+ * Motion Primitives interaction patterns, and Magic UI ambient-grid ideas.
+ */
+
+.dark {
+  --background: #080c0b;
+  --surface: #0d1211;
+  --surface-raised: #121917;
+  --surface-sunken: #070a09;
+  --border: #202925;
+  --line-strong: #354139;
+  --sidebar: #070b0a;
+  --primary: #82bea0;
+  --accent: #e1a244;
+}
+
+body {
+  background:
+    radial-gradient(circle at 66% -12%, rgb(90 76 206 / 0.08), transparent 34rem),
+    radial-gradient(circle at 92% 28%, rgb(44 142 196 / 0.06), transparent 28rem),
+    var(--background);
+}
+
+.app-page {
+  max-width: 1520px;
+}
+
+.task-row {
+  position: relative;
+  margin-inline: -0.55rem;
+  padding-inline: 0.55rem;
+}
+
+.task-row::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%);
+  opacity: 0;
+  content: "";
+  transition: opacity 180ms ease;
+}
+
+.task-row:hover::before {
+  opacity: 1;
+}
+
+.metric-band {
+  gap: 0;
+  border: 1px solid var(--line-strong);
+  padding: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, transparent), color-mix(in srgb, var(--surface-sunken) 68%, transparent));
+}
+
+.metric-band > div {
+  min-height: 5.6rem;
+  padding: 0.9rem 1rem;
+  border-right: 1px solid var(--border);
+}
+
+.metric-band > div:last-child {
+  border-right: 0;
+}
+
+.metric-band > div:first-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.finance-command-strip,
+.health-action-strip {
+  padding: 0.45rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+
+.finance-side-panel,
+.health-log-panel {
+  border: 1px solid var(--border);
+  padding: 1rem;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, transparent), color-mix(in srgb, var(--surface-sunken) 72%, transparent));
+}
+
+.summary-surface {
+  border-color: var(--line-strong);
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.02);
+}
+
+.section-heading {
+  align-items: center;
+}
+
+.section-heading h2 {
+  letter-spacing: 0.035em;
+}
+
+input,
+textarea,
+select {
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+@media (max-width: 639px) {
+  .metric-band > div {
+    border-bottom: 1px solid var(--border);
+  }
+}

@@ -1,2 +1,5 @@
-import { TodayScreen } from "@/components/dashboard/today-screen";
-export default function TodayPage() { return <TodayScreen />; }
+import { CommandCenterScreen } from "@/components/dashboard/command-center-screen";
+
+export default function TodayPage() {
+  return <CommandCenterScreen />;
+}

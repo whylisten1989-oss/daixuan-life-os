@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Providers } from "@/components/providers";
 import "./globals.css";
+import "./visual-rescue.css";
 
 export const metadata: Metadata = {
   title: { default: "岱旋 Life OS", template: "%s · 岱旋 Life OS" },
@@ -14,7 +15,7 @@ export const viewport: Viewport = {
   colorScheme: "dark light",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f3f4f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#0c1110" },
+    { media: "(prefers-color-scheme: dark)", color: "#080c0b" },
   ],
 };
 
